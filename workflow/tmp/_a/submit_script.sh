@@ -9,4 +9,4 @@
 . ../00_env/env_vars.sh
 
 # Execute step
-srun bash -c 'execute_step "$@"' _ "$@"
+execute_step "$@"

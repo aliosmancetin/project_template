@@ -9,4 +9,4 @@
 . env_vars.sh
 
 # Setup env
-srun bash -c 'setup_env "$@"' _ "$@"
+setup_env "$@"

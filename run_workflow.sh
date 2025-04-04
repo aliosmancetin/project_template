@@ -575,8 +575,9 @@ submit_job() {
 
 # Run jobs standalone (without SLURM)
 run_standalone() {
-    local step_dir=$1
-    shift
+    local step_dir="$1"
+    local dependency="$2"
+    shift 2
     local cli_args=("$@")
     local submit_script
     submit_script=$(get_submit_script "${step_dir}")
@@ -604,23 +605,33 @@ run_standalone() {
 
         # For pipeline steps, assume the submit_script is designed to handle pipeline execution.
         log_action "INFO" "Running pipeline step for ${step_name}"
-        bash "${submit_script}" "${cli_args[@]}"
-        local status=$?
+
+        (
+            if [[ -n "${dependency}" ]]; then
+                IFS=':' read -ra pid_array <<< "${dependency}"
+                for pid in "${pid_array[@]}"; do
+                    log_action "INFO" "Step ${step_name} waiting for PID: ${pid} (polling)"
+                    while kill -0 "${pid}" 2>/dev/null; do
+                        sleep 1
+                    done
+                done
+            fi
+
+            bash "${submit_script}" "${cli_args[@]}"
+        ) &
+        local pid=$!
 
         popd > /dev/null || exit 1
 
-        if [[ $status -eq 0 ]]; then
-            STEP_JOB_IDS["$step_name"]="standalone_pipeline:success"
-            if [[ ! " ${STEP_ORDER[*]} " == *"${step_name}"* ]]; then
-                STEP_ORDER+=("$step_name")
-            fi
-            log_action "INFO" "Pipeline step ${step_name} completed successfully (standalone mode)"
+        STEP_JOB_IDS["$step_name"]="${pid}"
+        [[ -n "$dependency" ]] && STEP_DEPENDENCIES["$step_name"]="$dependency"
+        [[ ! " ${STEP_ORDER[*]} " == *"${step_name}"* ]] && STEP_ORDER+=("${step_name}")
+        JOB_ID="${pid}"
+
+        if [[ -n "${dependency}" ]]; then
+            log_action "INFO" "Pipeline step ${step_name} launched in background with PID: ${pid} (Dependency: PID(s) ${dependency})"
         else
-            STEP_JOB_IDS["$step_name"]="standalone_pipeline:failed"
-            if [[ ! " ${STEP_ORDER[*]} " == *"${step_name}"* ]]; then
-                STEP_ORDER+=("$step_name")
-            fi
-            log_action "ERROR" "Pipeline step ${step_name} failed with status ${status} (standalone mode)"
+            log_action "INFO" "Pipeline step ${step_name} launched in background with PID: ${pid}"
         fi
 
     elif [[ "${step_type}" == "task" && "${step_mode}" == "array" ]]; then
@@ -640,44 +651,64 @@ run_standalone() {
             return 0
         else
             log_action "INFO" "Running standalone script for step ${step_name} (step_mode=${step_mode})"
-            bash "${submit_script}" "${cli_args[@]}"
-            local status=$?
+            (
+                if [[ -n "${dependency}" ]]; then
+                    IFS=':' read -ra pid_array <<< "${dependency}"
+                    for pid in "${pid_array[@]}"; do
+                        log_action "INFO" "Step ${step_name} waiting for PID: ${pid} (polling)"
+                        while kill -0 "${pid}" 2>/dev/null; do
+                            sleep 1
+                        done
+                    done
+                fi
+
+                bash "${submit_script}" "${cli_args[@]}"
+            ) &
+            local pid=$!
+
             popd > /dev/null || exit 1
 
-            if [[ $status -eq 0 ]]; then
-                STEP_JOB_IDS["$step_name"]="standalone:success (step_mode=${step_mode})"
-                if [[ ! " ${STEP_ORDER[*]} " == *"${step_name}"* ]]; then
-                    STEP_ORDER+=("$step_name")
-                fi
-                log_action "INFO" "Step ${step_name} completed successfully (standalone mode, step_mode=${step_mode})"
+            STEP_JOB_IDS["$step_name"]="${pid}"
+            [[ -n "$dependency" ]] && STEP_DEPENDENCIES["$step_name"]="$dependency"
+            [[ ! " ${STEP_ORDER[*]} " == *"${step_name}"* ]] && STEP_ORDER+=("${step_name}")
+            JOB_ID="${pid}"
+
+            if [[ -n "${dependency}" ]]; then
+                log_action "INFO" "Step ${step_name} launched in background with PID: ${pid} (Dependency: PID(s) ${dependency})"
             else
-                STEP_JOB_IDS["$step_name"]="standalone:failed (step_mode=${step_mode})"
-                if [[ ! " ${STEP_ORDER[*]} " == *"${step_name}"* ]]; then
-                    STEP_ORDER+=("$step_name")
-                fi
-                log_action "ERROR" "Step ${step_name} failed with status ${status} (standalone mode, step_mode=${step_mode})"
+                log_action "INFO" "Step ${step_name} launched in background with PID: ${pid}"
             fi
         fi
     elif [[ "${step_type}" == "task" && "${step_mode}" == "single" ]]; then
         # ##### Task Step with Single Mode #####
 
         log_action "INFO" "Running standalone script for step ${step_name}"
-        bash "${submit_script}" "${cli_args[@]}"
-        local status=$?
+        (
+            if [[ -n "${dependency}" ]]; then
+                IFS=':' read -ra pid_array <<< "${dependency}"
+                for pid in "${pid_array[@]}"; do
+                    log_action "INFO" "Step ${step_name} waiting for PID: ${pid} (polling)"
+                    while kill -0 "${pid}" 2>/dev/null; do
+                        sleep 1
+                    done
+                done
+            fi
+
+            bash "${submit_script}" "${cli_args[@]}"
+        ) &
+        local pid=$!
+
         popd > /dev/null || exit 1
 
-        if [[ $status -eq 0 ]]; then
-            STEP_JOB_IDS["$step_name"]="standalone:success"
-            if [[ ! " ${STEP_ORDER[*]} " == *"${step_name}"* ]]; then
-                STEP_ORDER+=("$step_name")
-            fi
-            log_action "INFO" "Step ${step_name} completed successfully (standalone mode)"
+        STEP_JOB_IDS["$step_name"]="${pid}"
+        [[ -n "$dependency" ]] && STEP_DEPENDENCIES["$step_name"]="$dependency"
+        [[ ! " ${STEP_ORDER[*]} " == *"${step_name}"* ]] && STEP_ORDER+=("${step_name}")
+        JOB_ID="${pid}"
+
+        if [[ -n "${dependency}" ]]; then
+            log_action "INFO" "Step ${step_name} launched in background with PID: ${pid} (Dependency: PID(s) ${dependency})"
         else
-            STEP_JOB_IDS["$step_name"]="standalone:failed"
-            if [[ ! " ${STEP_ORDER[*]} " == *"${step_name}"* ]]; then
-                STEP_ORDER+=("$step_name")
-            fi
-            log_action "ERROR" "Step ${step_name} failed with status ${status} (standalone mode)"
+            log_action "INFO" "Step ${step_name} launched in background with PID: ${pid}"
         fi
     fi
 }
@@ -697,6 +728,7 @@ declare -A arg_mappings=(
     ["--config"]="--config"
     ["-c"]="--config"
 )
+parse_workflow_config_file
 
 # Workflow config engine option, if engine is specified as standalone, STANDALONE_MODE should be true.
 # This is overridden by the --standalone flag even if engine is slurm in the config
@@ -812,17 +844,18 @@ if [[ "${DEFAULT_RUN}" == true ]]; then
         
         if [[ "${step_number_dec}" -eq "${max_step_number_dec}" ]]; then
             if [[ "${STANDALONE_MODE}" == true ]]; then
-                run_standalone "${step_dir}" "${cli_args[@]}"
+                run_standalone "${step_dir}" "" "${cli_args[@]}"
             else
                 submit_job "${step_dir}" "" "${cli_args[@]}"
-                job_id="${JOB_ID}"
-                step_type="${STEP_TYPE}"
-                step_mode="${STEP_MODE}"
-                if [[ -n "${job_id}" ]]; then
-                    JOB_IDS_BY_STEP_NUMBER["${step_number}"]+="${job_id}:"
-                else
-                    log_action "ERROR" "Job submission failed for ${step_dir}"
-                fi
+            fi
+            
+            job_id="${JOB_ID}"
+            step_type="${STEP_TYPE}"
+            step_mode="${STEP_MODE}"
+            if [[ -n "${job_id}" ]]; then
+                JOB_IDS_BY_STEP_NUMBER["${step_number}"]+="${job_id}:"
+            else
+                log_action "ERROR" "Job submission failed for ${step_dir}"
             fi
         fi
     done
@@ -862,19 +895,20 @@ elif [[ "${RUN_FULL_WORKFLOW}" == true || -n "${START_STEP}" || -n "${END_STEP}"
 
         # Submit or run the job
         if [[ "${STANDALONE_MODE}" == true ]]; then
-            run_standalone "${step_dir}" "${cli_args[@]}"
+            run_standalone "${step_dir}" "${dependency_str}" "${cli_args[@]}"
         else
-            submit_job "$step_dir" "$dependency_str" "${cli_args[@]}"
-            job_id="${JOB_ID}"
-            step_type="${STEP_TYPE}"
-            step_mode="${STEP_MODE}"
-            if [[ -n "${job_id}" ]]; then
-                # Store job IDs by their step number
-                JOB_IDS_BY_STEP_NUMBER["$step_number"]+="$job_id:"
-            else
-                log_action "ERROR" "Job submission failed for $step_name"
-                break
-            fi
+            submit_job "${step_dir}" "${dependency_str}" "${cli_args[@]}"
+        fi
+
+        job_id="${JOB_ID}"
+        step_type="${STEP_TYPE}"
+        step_mode="${STEP_MODE}"
+        if [[ -n "${job_id}" ]]; then
+            # Store job IDs by their step number
+            JOB_IDS_BY_STEP_NUMBER["$step_number"]+="$job_id:"
+        else
+            log_action "ERROR" "Job submission failed for ${step_name}"
+            break
         fi
 
     done
@@ -905,13 +939,13 @@ elif [[ ${#SPECIFIC_STEPS[@]} -gt 0 ]]; then
                 # First step, no dependencies
                 dependency_str=""
             fi
-            prev_step_number="$step_number"
+            prev_step_number="${step_number}"
         fi
 
         # Get all step directories matching this step number
         matched_dirs=$(list_steps | grep "/${step_number}_")
         if [[ -z "$matched_dirs" ]]; then
-            log_action "ERROR" "Step $step_number not found in the workflow."
+            log_action "ERROR" "Step ${step_number} not found in the workflow."
             continue
         fi
 
@@ -921,19 +955,20 @@ elif [[ ${#SPECIFIC_STEPS[@]} -gt 0 ]]; then
 
             # Submit or run the job
             if [[ "${STANDALONE_MODE}" == true ]]; then
-                run_standalone "${step_dir}" "${cli_args[@]}"
+                run_standalone "${step_dir}" "${dependency_str}" "${cli_args[@]}"
             else
                 submit_job "${step_dir}" "${dependency_str}" "${cli_args[@]}"
-                job_id="${JOB_ID}"
-                step_type="${STEP_TYPE}"
-                step_mode="${STEP_MODE}"
-                if [[ -n "${job_id}" ]]; then
-                    # Store job IDs by their step number
-                    JOB_IDS_BY_STEP_NUMBER["$step_number"]+="$job_id:"
-                else
-                    log_action "ERROR" "Job submission failed for ${step_name}"
-                    break
-                fi
+            fi
+
+            job_id="${JOB_ID}"
+            step_type="${STEP_TYPE}"
+            step_mode="${STEP_MODE}"
+            if [[ -n "${job_id}" ]]; then
+                # Store job IDs by their step number
+                JOB_IDS_BY_STEP_NUMBER["$step_number"]+="$job_id:"
+            else
+                log_action "ERROR" "Job submission failed for ${step_name}"
+                break
             fi
         done
     done
