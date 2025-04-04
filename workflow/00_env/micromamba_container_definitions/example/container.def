@@ -1,0 +1,33 @@
+Bootstrap: docker
+From: mambaorg/micromamba:latest
+
+%files
+    env.yaml /home/mambauser/env.yaml
+	# requirements.txt /home/mambauser/requirements.txt
+
+%post
+	# Install the environment specified in env.yaml
+	micromamba install -y -n base -f /home/mambauser/env.yaml && \
+    micromamba clean --all --yes
+
+    # Create necessary tmp directories
+    mkdir -p /tmp/matplotlib
+    mkdir -p /tmp/numba
+    mkdir -p /tmp/fontconfig
+
+%environment
+    # Set environment variables if needed
+	export PATH="/opt/conda/bin:$PATH"
+
+    # Export necessary directory variables for python packages
+    export MPLCONFIGDIR=/tmp/matplotlib
+    export NUMBA_CACHE_DIR=/tmp/numba
+    export FONTCONFIG_PATH=/tmp/fontconfig
+
+%runscript
+    # Set the default command to use with run
+    /usr/local/bin/_entrypoint.sh $@
+
+%startscript
+    # Set the default command to use with instance start
+    /usr/local/bin/_entrypoint.sh $@

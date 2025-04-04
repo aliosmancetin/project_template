@@ -1,0 +1,1 @@
+fasta_digest == 0.1.2

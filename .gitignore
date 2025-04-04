@@ -1,0 +1,8 @@
+.proj/
+.Rproj.user/
+.Rhistory
+*.Rproj
+lib/
+containers/
+data/
+output/
