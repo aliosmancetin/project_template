@@ -24,7 +24,7 @@ col_data <- read_csv(
 )
 
 col_data <- col_data %>%
-  dplyr::right_join(file_df, by = join_by(File_ID == names), keep = TRUE) %>%
+  dplyr::right_join(file_df, by = join_by(Barcode == names), keep = TRUE) %>%
   dplyr::relocate(files, names)
 
 
@@ -37,17 +37,17 @@ se <- tximeta(
 se_gene <- summarizeToGene(
   se,
   assignRanges = "abundant",
-  countsFromAbundance = "lengthScaledTPM"
+  countsFromAbundance = "no"
 )
 
 saveRDS(
   se,
-  file = "summarized_experiment_object.RDS"
+  file = "summarized_experiment_object.rds"
 )
 
 saveRDS(
   se_gene,
-  file = "gene_summarized_experiment_object.RDS"
+  file = "gene_summarized_experiment_object.rds"
 )
 
 sessionInfo()

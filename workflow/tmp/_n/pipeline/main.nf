@@ -3,110 +3,24 @@
 nextflow.enable.dsl = 2
 
 
-
-process bam_to_fastq {
-    tag "${Sample_ID}"
-	publishDir "${params.outdir}/fastq/${File_ID}/", pattern: "*.fastq", mode:'copy'
-	publishDir "${params.logdir}/fastq/${File_ID}/", pattern: '.command*', mode:'copy'
-
-    input:
-    tuple val(Case_ID), val(Sample_ID), val(File_ID), val(File_Name)
-	val bam_dir
-
-    output:
-    tuple val(Case_ID), val(Sample_ID), val(File_ID), val(File_Name), emit: metadata
-	tuple path("*.R1.fastq"), path("*.R2.fastq"), path("*.S.fastq"), emit: fastq_files
-	path ".command*", emit: logs
-
-    script:
-	"""
-	echo "Case_ID: ${Case_ID}"
-	echo "Sample_ID: ${Sample_ID}"
-	echo "File_ID: ${File_ID}"
-	echo "File_Name: ${File_Name}"
-
-	samtools collate -@ 8 -u -O ${bam_dir}/${File_ID}/${File_Name} tmp |
-	samtools fastq -@ 8 \
-				   -1 ${File_Name}.R1.fastq \
-				   -2 ${File_Name}.R2.fastq \
-				   -s ${File_Name}.S.fastq \
-				   -0 /dev/null
-				   -c 6
-
-	"""
-
-
-	stub:
-	"""
-	echo "Case_ID: ${Case_ID}"
-	echo "Sample_ID: ${Sample_ID}"
-	echo "File_ID: ${File_ID}"
-	echo "File_Name: ${File_Name}"
-
-	samtools view -@ 16 \
-				  --bam \
-				  --with-header \
-				  --subsample 0.00001 \
-				  --subsample-seed 10 \
-				  --output "${File_Name}" \
-				  ${bam_dir}/${File_ID}/${File_Name}
-
-
-	samtools collate -@ 8 -u -O "${File_Name}" tmp |
-	samtools fastq -@ 16 \
-				   -1 ${File_Name}.R1.fastq \
-				   -2 ${File_Name}.R2.fastq \
-				   -s ${File_Name}.S.fastq \
-				   -0 /dev/null
-				   -c 6
-
-	"""
-}
-
-
 process perform_fastqc {
-    tag "${Sample_ID}"
-	publishDir "${params.outdir}/fastqc/${File_ID}/", pattern: "*fastqc.{html,zip}", mode:'copy'
-	publishDir "${params.logdir}/fastqc/${File_ID}/", pattern: '.command*', mode:'copy'
+    tag "${Pool}"
+	publishDir "${params.outdir}/fastqc/${Pool}/", pattern: "*fastqc.{html,zip}", mode:'symlink'
+	publishDir "${params.logdir}/fastqc/${Pool}/", pattern: '.command*', mode:'symlink'
 
     input:
-	tuple val(Case_ID), val(Sample_ID), val(File_ID), val(File_Name)
-	path fastq_files
+	tuple val(Pool), path(Barcodes), path(Read1), path(Read2)
 
     output:
-	tuple val(Case_ID), val(Sample_ID), val(File_ID), val(File_Name), emit: metadata
+	tuple val(Pool), path(Barcodes), path(Read1), path(Read2), emit: fastq_files
 	path "*fastqc.{html,zip}", emit: fastqc_results
 	path ".command*", emit: logs
 
     script:
 	"""
-	echo "Case_ID: ${Case_ID}"
-	echo "Sample_ID: ${Sample_ID}"
-	echo "File_ID: ${File_ID}"
-	echo "File_Name: ${File_Name}"
+	echo "Pool: ${Pool}"
 
-    fastqc -t 16 ${fastq_files}
-
-	"""
-}
-
-
-
-process perform_multiqc {
-    tag "multiqc"
-	publishDir "${params.outdir}/multiqc/", pattern: "multiqc**", mode:'copy'
-	publishDir "${params.logdir}/multiqc/", pattern: '.command*', mode:'copy'
-
-    input:
-	path fastqc_results
-
-    output:
-	path "multiqc**", emit: multiqc_result
-	path ".command*", emit: logs
-
-    script:
-	"""
-    multiqc --fullnames .
+    fastqc -t 80 "${Read1}" "${Read2}"
 
 	"""
 }
@@ -114,115 +28,175 @@ process perform_multiqc {
 
 
 process perform_STAR {
-    tag "${Sample_ID}"
-    publishDir "${params.outdir}/STAR/${File_ID}", pattern: "${File_ID}**", mode:'copy'
-	publishDir "${params.logdir}/STAR/${File_ID}", pattern: '.command*', mode:'copy'
+    tag "${Pool}"
+    publishDir "${params.outdir}/STAR/${Pool}", pattern: "${Pool}**", mode:'symlink'
+	publishDir "${params.logdir}/STAR/${Pool}", pattern: '.command*', mode:'symlink'
 
     input:
-	tuple val(Case_ID), val(Sample_ID), val(File_ID), val(File_Name)
-	tuple path(R1), path(R2)
+	tuple val(Pool), path(Barcodes), path(Read1), path(Read2)
 	val STAR_index_dir
 
     output:
-	tuple val(Case_ID), val(Sample_ID), val(File_ID), val(File_Name), emit: metadata
-	path "${File_ID}.Aligned.toTranscriptome.out.bam", emit: STAR_aligned_to_transcriptome
-	path "${File_ID}**", emit: STAR_results
+	tuple val(Pool), path(Barcodes), emit: Pool_Barcodes
+	path "${Pool}.Aligned.toTranscriptome.out.bam", emit: STAR_aligned_to_transcriptome
+	path "${Pool}.Aligned.sortedByCoord.out.bam", emit: STAR_aligned_sorted
+	path "${Pool}.Aligned.out.bam", emit: STAR_aligned
+	path "${Pool}**", emit: STAR_results
 	path ".command*", emit: logs
 
+// Read2 Read1 is not a mistake, this is the correct configuration for STARsolo
     script:
 	"""
-	echo "Case_ID: ${Case_ID}"
-	echo "Sample_ID: ${Sample_ID}"
-	echo "File_ID: ${File_ID}"
-	echo "File_Name: ${File_Name}"
+	echo "Pool: ${Pool}"
 
-    STAR \
-		--readFilesIn ${R1} ${R2} \
-		--outSAMattrRGline 'ID:${File_ID}' \
-		--genomeDir ${STAR_index_dir} \
+	STAR \
+		--readFilesIn "${Read2}" "${Read1}" \
+		--genomeDir "${STAR_index_dir}" \
 		--readFilesCommand zcat \
-		--runThreadN 16 \
+		--outFileNamePrefix "${Pool}." \
 		--twopassMode Basic \
-		--outFilterMultimapNmax 20 \
-		--alignSJoverhangMin 8 \
-		--alignSJDBoverhangMin 1 \
-		--outFilterMismatchNmax 999 \
-		--outFilterMismatchNoverLmax 0.1 \
-		--alignIntronMin 20 \
-		--alignIntronMax 1000000 \
-		--alignMatesGapMax 1000000 \
-		--outFilterType BySJout \
+		--quantMode TranscriptomeSAM \
+		--outSAMtype BAM Unsorted SortedByCoordinate \
+		--outSAMunmapped Within \
+		--outReadsUnmapped Fastx \
+		--outSAMattributes NH HI nM AS CR UR CB GX GN sS sQ sM cN \
 		--outFilterScoreMinOverLread 0.33 \
 		--outFilterMatchNminOverLread 0.33 \
-		--limitSjdbInsertNsj 1200000 \
-		--outFileNamePrefix ${File_ID}. \
-		--outSAMstrandField intronMotif \
-		--outFilterIntronMotifs None \
-		--alignSoftClipAtReferenceEnds Yes \
-		--quantMode TranscriptomeSAM GeneCounts \
-		--outSAMtype BAM Unsorted SortedByCoordinate \
-		--outWigType wiggle \
-		--outSAMunmapped Within \
-		--genomeLoad NoSharedMemory \
-		--chimSegmentMin 15 \
-		--chimJunctionOverhangMin 15 \
-		--chimOutType Junctions SeparateSAMold WithinBAM SoftClip \
-		--chimOutJunctionFormat 1 \
-		--chimMainSegmentMultNmax 1 \
-		--outSAMattributes NH HI AS nM NM ch
+		--clip3pAdapterSeq polyA \
+		--clip3pAdapterMMp 0.1 \
+		--soloType CB_samTagOut \
+		--soloStrand Forward \
+		--soloCBwhitelist "${Barcodes}" \
+		--soloUMIdedup NoDedup \
+		--soloCBmatchWLtype 1MM \
+		--soloCBstart 10 \
+		--soloCBlen 11 \
+		--soloUMIstart 1 \
+		--soloUMIlen 9 \
+		--soloBarcodeReadLength 28 \
+		--soloCellFilter None \
+		--soloFeatures Gene \
+		--runThreadN 80
 
 	"""
 }
 
 
-
-process perform_salmon {
-    tag "${Sample_ID}"
-	publishDir "${params.outdir}/salmon/", pattern: "${File_ID}**", mode:'copy'
-	publishDir "${params.logdir}/salmon/${File_ID}", pattern: '.command*', mode:'copy'
+process split_bam {
+    tag "${Pool}"
+	publishDir "${params.outdir}/split_bam/${Pool}", pattern: "${Pool}*", mode:'symlink'
+	publishDir "${params.outdir}/split_bam/${Pool}", pattern: "bam_named", mode:'symlink' // "bam_named/${Pool}.Aligned.sortedByCoord.out*"
+	publishDir "${params.outdir}/split_bam/${Pool}", pattern: "flagstats", mode:'symlink'
+	publishDir "${params.logdir}/split_bam/${Pool}", pattern: '.command*', mode:'symlink'
 
     input:
-	tuple val(Case_ID), val(Sample_ID), val(File_ID), val(File_Name)
-	path transcriptome_alignment
+	tuple val(Pool), path(Barcodes)
+	path STAR_aligned_to_transcriptome
+	path STAR_aligned_sorted
+	//path STAR_aligned
 
     output:
-	tuple val(Case_ID), val(Sample_ID), val(File_ID), val(File_Name), emit: metadata
-	path "${File_ID}*", emit: salmon_results
+	tuple val(Pool), path(Barcodes), emit: Pool_Barcodes
+	path "${Pool}.Aligned.toTranscriptome.out_[ACGT][ACGT][ACGT][ACGT][ACGT][ACGT][ACGT][ACGT][ACGT][ACGT][ACGT].bam", emit: transcriptome_alignment
+	path "${Pool}.Aligned.toTranscriptome.out.no_barcode_assignment.bam", emit: unassigned_reads
+	path "bam_named", emit: bam_named, type: 'dir' // path "bam_named/${Pool}.Aligned.sortedByCoord.out*", emit: bams_named
+	path "flagstats", emit: flagstats, type: 'dir'
 	path ".command*", emit: logs
 
     script:
     """
-	echo "Case_ID: ${Case_ID}"
-	echo "Sample_ID: ${Sample_ID}"
-	echo "File_ID: ${File_ID}"
-	echo "File_Name: ${File_Name}"
+	echo "Pool: ${Pool}"
+	threads=80
+
+	bam_file_array=("${STAR_aligned_to_transcriptome}" "${STAR_aligned_sorted}")
+	bam_folder_array=(".Aligned.toTranscriptome.out." ".Aligned.sortedByCoord.out.")
+	
+	# Index transcriptome aligned bam file
+	samtools index -@ "\${threads}" ${STAR_aligned_sorted}
+	
+
+	for index in "\${!bam_file_array[@]}"; do
+		samtools split -d CB -v -@ "\${threads}" -M -1 -u "${Pool}\${bam_folder_array[\${index}]}no_barcode_assignment.bam" "\${bam_file_array[\${index}]}"
+	done
+	
+	
+	# Index all the sorted bam files
+	sorted_bam_array=(\$(ls "${Pool}".Aligned.sortedByCoord.out[._]*.bam))
+	
+	for sorted_bam in "\${sorted_bam_array[@]}"; do
+		samtools index -@ "\${threads}" \${sorted_bam}
+	done
+
+
+	# Create flagstats for each bam file
+	mkdir flagstats
+
+	for bam in *Aligned.sortedByCoord.out*.bam; do
+    	samtools flagstat -@ "\${threads}" -O tsv "\${bam}" > "flagstats/\${bam%.bam}.flagstat.tsv"
+		unique=\$(samtools view -@ "\${threads}" -c -q 255 "\${bam}")
+		echo -e "\${unique}\t0\tuniquely mapped" >> "flagstats/\${bam%.bam}.flagstat.tsv"
+	done
+	
+
+	# Create a named bam file for each barcode as a symlink
+	mkdir -p bam_named
+	
+	while IFS=\$',' read -r sample barcode pool; do
+		if [ "\${pool}" == "${Pool}" ]; then
+			cp -s "\${PWD}"/"${Pool}".Aligned.sortedByCoord.out_"\${barcode}".bam* bam_named
+			mv -T bam_named/"${Pool}".Aligned.sortedByCoord.out_"\${barcode}".bam bam_named/"${Pool}".Aligned.sortedByCoord.out."\${sample}".bam
+			mv -T bam_named/"${Pool}".Aligned.sortedByCoord.out_"\${barcode}".bam.bai bam_named/"${Pool}".Aligned.sortedByCoord.out."\${sample}".bam.bai
+		else continue
+		fi
+	done < "${params.barcode_table}"
+	
+    """
+}
+
+
+process perform_salmon {
+    tag "${Pool}_${Barcode}"
+	publishDir "${params.outdir}/salmon/${Pool}/", pattern: "${Barcode}", mode:'copy'
+	publishDir "${params.logdir}/salmon/${Pool}/${Barcode}", pattern: '.command*', mode:'copy'
+
+    input:
+	tuple path(transcriptome_alignment), val(Pool), val(Barcode)
+
+    output:
+	tuple val(Pool), val(Barcode), path("${Barcode}", type: 'dir'), emit: salmon_results
+	// path "${Barcode}", emit: salmon_results, type: 'dir'
+	path ".command*", emit: logs
+
+    script:
+    """
+	echo "Pool: ${Pool}"
+	echo "Barcode: ${Barcode}"
 
 	salmon quant \
 				--targets "${params.transcriptome_fasta}" \
 				--geneMap "${params.gtf_file}" \
 				--gencode \
-				--libType IU \
 				--threads 16 \
+				--libType SF \
+				--noLengthCorrection \
 				--alignments "${transcriptome_alignment}" \
-				--output "${File_ID}"
+				--output "${Barcode}"
 	
     """
 }
 
 
 process perform_tximeta {
-    tag "tximeta"
-	publishDir "${params.outdir}/tximeta/", pattern: "*summarized_experiment_object.RDS", mode:'copy'
-	publishDir "${params.logdir}/tximeta/", pattern: '.command*', mode:'copy'
-	publishDir "${params.outdir}/salmon/", pattern: "**meta_info_with_seq_hash.json", mode:'copy'
+    tag "${pool}"
+	publishDir "${params.outdir}/tximeta/${pool}", pattern: "*summarized_experiment_object.rds", mode:'copy'
+	publishDir "${params.logdir}/tximeta/${pool}", pattern: '.command*', mode:'symlink'
+	publishDir "${params.outdir}/salmon/${pool}", pattern: "**meta_info_with_seq_hash.json", mode:'symlink'
 
     input:
-	val File_IDs
-	path salmon_results
-	val seq_hash
-
+	tuple val(pool), val(barcodes), path(salmon_results), val(seq_hash)
+	
     output:
-	path "*summarized_experiment_object.RDS", emit: se_objects
+	path "*summarized_experiment_object.rds", emit: se_objects
 	path ".command*", emit: logs
 	path "**meta_info_with_seq_hash.json", emit: meta_info_with_seq_hash
 
@@ -232,15 +206,27 @@ process perform_tximeta {
 	export R_USER_CONFIG_DIR=${params.R_USER_CONFIG_DIR}
 	export R_USER_DATA_DIR=${params.R_USER_DATA_DIR}
 
-	file_ids="${File_IDs}"
-	file_id_list="\${file_ids%]}"
-	file_id_list="\${file_id_list#[}"
-	
-	IFS=, read -ra file_id_array <<< "\${file_id_list}"
-	file_id_array=("\${file_id_array[@]# }")
+	echo "Pool: ${pool}"
+	echo "Barcodes: ${barcodes}"
 
-	python3 "${params.scriptdir}/update_meta_info.py" "\${PWD}" \${file_id_array[@]} --new_index_seq_hash "${seq_hash["value"]}" --update_json_dir "${params.scriptdir}"
-	Rscript "${params.scriptdir}/perform_tximeta.R" "${workflow.projectDir}" "\${PWD}" "${params.bam_metadata}" \${file_id_array[@]}
+	barcodes_="${barcodes}"
+	barcodes_list="\${barcodes_%]}"
+	barcodes_list="\${barcodes_list#[}"
+	
+	IFS=, read -ra barcodes_array <<< "\${barcodes_list}"
+	barcodes_array=("\${barcodes_array[@]# }")
+
+	python3 "${params.scriptdir}/update_meta_info.py" \
+			"\${PWD}" \
+			\${barcodes_array[@]} \
+			--new_index_seq_hash "${seq_hash["value"]}" \
+			--update_json_dir "${params.scriptdir}"
+
+	Rscript "${params.scriptdir}/perform_tximeta.R" \
+			"${workflow.projectDir}" \
+			"\${PWD}" \
+			"${params.barcode_table}" \
+			\${barcodes_array[@]}
 
     """
 }
@@ -254,55 +240,56 @@ process perform_tximeta {
 workflow {
 
 	// Read input
-	bam_files = Channel
-        .fromPath(params.bam_metadata, checkIfExists: true)
+	fastq_files = Channel
+        .fromPath(params.file_table, checkIfExists: true)
         .splitCsv( header: true )
         .map { item ->
             tuple(
-				item.Case_ID,
-				item.Sample_ID,
-                item.File_ID,
-                item.File_Name,
+				item.Pool,
+				item.Barcodes,
+				item.Read1,
+                item.Read2
             )
         }
 
-
-	// Perform conversion to fastq
-	bam_to_fastq(bam_files, params.bam_dir)
-
 	// Perform fastqc
-	perform_fastqc(
-		bam_to_fastq.out.metadata,
-		bam_to_fastq.out.fastq_files
-	)
-
-	// Perform multiqc
-	fastqc_results = perform_fastqc.out.fastqc_results.collect()
-	perform_multiqc(fastqc_results)
+	perform_fastqc(fastq_files)
   
 	// Perform STAR
-	fastq_pair = bam_to_fastq.out.fastq_files.map{
-		R1, R2, _S -> tuple(R1, R2) 
-	}
-
 	perform_STAR(
-		bam_to_fastq.out.metadata,
-		fastq_pair,
+		perform_fastqc.out.fastq_files,
 		params.star_index_dir
 	)
 
+	// Perform split_bam
+	split_bam(
+		perform_STAR.out.Pool_Barcodes,
+		perform_STAR.out.STAR_aligned_to_transcriptome,
+		perform_STAR.out.STAR_aligned_sorted
+	)
+
+
+	// Flatten trans_align_bams output from split_bam
+  	transcriptome_alignment = split_bam.out.transcriptome_alignment
+		.flatten()
+		.map { it ->
+			tuple(
+				it,
+				it.name.replaceAll(~/\.Aligned\.toTranscriptome\.out_[ACGT]{11}\.bam/, ""), // Pool
+				it.name.replaceAll(~/\.bam/, "").replaceAll(~/.*\.Aligned\.toTranscriptome\.out_/, "") // Barcode
+			)
+		}
+		//.view()
+	
+
 	// Perform salmon alignment mode quantification
 	perform_salmon(
-		perform_STAR.out.metadata,
-		perform_STAR.out.STAR_aligned_to_transcriptome
+		transcriptome_alignment
 	)
   
 	// Perform tximeta to import from salmon output
-	file_ids = perform_salmon.out.metadata
-        .map { _Case_ID, _Sample_ID, File_ID, _File_Name -> File_ID }
-        .collect()
-
-	salmon_results = perform_salmon.out.salmon_results.collect()
+	salmon_results = perform_salmon.out.salmon_results
+		.groupTuple()
 
 	seq_hash = Channel
 		.fromPath(params.transcriptome_fasta_digest, checkIfExists: true)
@@ -310,9 +297,7 @@ workflow {
 		.filter { it.key == 'seq_hash' }
 
 	perform_tximeta(
-		file_ids,
-		salmon_results,
-		seq_hash
+		salmon_results.combine(seq_hash)
 	)
   
 }

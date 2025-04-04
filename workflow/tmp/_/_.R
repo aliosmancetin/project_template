@@ -3,6 +3,7 @@ library(tidyverse)
 
 out_dir <- file.path(
   "output",
+  "intermediate",
   "____"
 )
 
