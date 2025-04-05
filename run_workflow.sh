@@ -716,6 +716,8 @@ run_standalone() {
 
 
 
+# Log the command and run start
+log_run_start
 
 # Parse command-line arguments
 START_STEP=""
@@ -809,9 +811,6 @@ if [[ -n "$END_STEP" ]]; then
 fi
 
 export STANDALONE_MODE
-
-# Log the command and run start
-log_run_start
 
 # Log CLI arguments in DEBUG_MODE
 log_action "DEBUG" "CLI arguments in associative array: $(for key in "${!cli_arguments[@]}"; do printf "\n%s=%s" "${key}" "${cli_arguments[$key]}" ; done)"
