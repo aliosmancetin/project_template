@@ -44,7 +44,7 @@ parse_workflow_config_file() {
     workflow_config_values=( )          # reset/clear each time
 
     local workflow_config_file
-    workflow_config_file="${WORKFLOW_DIR}/workflow.config"
+    workflow_config_file="${PROJDIR}/workflow.config"
     if [[ -f "${workflow_config_file}" ]]; then
         # Read the file line by line
         while IFS="=" read -r key value; do
