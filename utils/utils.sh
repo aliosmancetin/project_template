@@ -253,41 +253,127 @@ setup_guix_profile () {
 export -f setup_guix_profile
 
 
+# Normalize function (optimized from your version)
+normalize_scm() {
+  local input_file="$1"
+  local output_file="${2:-/dev/stdout}"
+
+  if [[ ! -f "$input_file" ]]; then
+    echo "Error: File '$input_file' not found." >&2
+    return 1
+  fi
+
+  sed -e 's/;.*//' \
+      -e 's/^[[:space:]]*//' \
+      -e 's/[[:space:]]*$//' \
+      -e '/^$/d' "$input_file" | tr -s '[:space:]' ' ' > "$output_file"
+}
+
+export -f normalize_scm
+
+# Cache Guix profile (after successful creation)
+cache_guix_profile() {
+  local profile_name="$1"
+  local profile_desc="${PROJ_GUIX_PROFILE_DESC}/${profile_name}"
+  local cache_dir="${PROJDIR}/.proj/.cache/guix_profile_descriptions/${profile_name}"
+  mkdir -p "$cache_dir"
+
+  normalize_scm "${profile_desc}/channels.scm" "${cache_dir}/channels.scm"
+  normalize_scm "${profile_desc}/manifest.scm" "${cache_dir}/manifest.scm"
+
+  sha256sum "${cache_dir}/channels.scm" | awk '{print $1}' > "${cache_dir}/channels.hash"
+  sha256sum "${cache_dir}/manifest.scm" | awk '{print $1}' > "${cache_dir}/manifest.hash"
+
+  log_info "[cache_guix_profile] Cached normalized and hashed files for profile: ${profile_name}"
+}
+
+export -f cache_guix_profile
+
+# Check Guix cache: returns 0 if cache is valid (unchanged), 1 otherwise
+check_guix_cache() {
+  local profile_name="$1"
+  local profile_desc="${PROJ_GUIX_PROFILE_DESC}/${profile_name}"
+  local cache_dir="${PROJDIR}/.proj/.cache/guix_profile_descriptions/${profile_name}"
+
+  if [[ ! -f "${cache_dir}/channels.hash" || ! -f "${cache_dir}/manifest.hash" ]]; then
+    log_info "[check_guix_cache] No cache found for profile: ${profile_name}"
+    return 1
+  fi
+
+  local temp_dir
+  temp_dir=$(mktemp -d)
+  normalize_scm "${profile_desc}/channels.scm" "${temp_dir}/channels.scm"
+  normalize_scm "${profile_desc}/manifest.scm" "${temp_dir}/manifest.scm"
+
+  local current_channels_hash current_manifest_hash
+  current_channels_hash=$(sha256sum "${temp_dir}/channels.scm" | awk '{print $1}')
+  current_manifest_hash=$(sha256sum "${temp_dir}/manifest.scm" | awk '{print $1}')
+
+  local cached_channels_hash cached_manifest_hash
+  cached_channels_hash=$(cat "${cache_dir}/channels.hash")
+  cached_manifest_hash=$(cat "${cache_dir}/manifest.hash")
+
+  rm -rf "$temp_dir"
+
+  if [[ "$current_channels_hash" == "$cached_channels_hash" && "$current_manifest_hash" == "$cached_manifest_hash" ]]; then
+    log_info "[check_guix_cache] Cache valid for profile: ${profile_name}. Skipping rebuild."
+    return 0
+  else
+    log_info "[check_guix_cache] Cache mismatch for profile: ${profile_name}. Rebuild required."
+    return 1
+  fi
+}
+
+export -f cache_guix_profile
+
+
 create_guix_profile () {
     local PROFILE_NAME=$1
 
     log_info "[create_guix_profile] Setting up: ${PROFILE_NAME}"
 
     PROFILE_DIR="${PROJ_GUIX_PROFILE_DIR}/${PROFILE_NAME}/${PROFILE_NAME}"
-
-    # Cleanup and create Guix profile directory
-    log_info "[create_guix_profile] Cleaning up and creating Guix profile directory: ${PROFILE_DIR}"
-    rm -rf "$(dirname "${PROFILE_DIR}")"
-    mkdir -p "$(dirname "${PROFILE_DIR}")"
-
-    # Pull Guix channels and create profile
-    log_info "[create_guix_profile] Pulling Guix channels and creating profile..."
-    if guix pull --channels="channels.scm" --profile="${PROFILE_DIR}"
-    then log_info "[create_guix_profile] guix pull executed successfully."
-    else log_error "[create_guix_profile] guix pull failed!"; return 1
-    fi
-
     GUIX_PROFILE="${PROFILE_DIR}"
-    . "${GUIX_PROFILE}/etc/profile"
 
-    if [[ "${DEBUG_MODE,,}" == "true" ]]; then
-        guix describe --format=channels -p "${GUIX_PROFILE}" > profile_channels_used.scm
-    fi
+    # Check cache for guix
+    local guix_env_built=false
+    if check_guix_cache "${PROFILE_NAME}"; then
+        log_info "[create_guix_profile] Skipping Guix profile build for ${PROFILE_NAME}, cache is valid."
+    else
+        # Build Guix profile (channels + manifest)
+        log_info "[create_guix_profile] Cleaning up and creating Guix profile directory: ${PROFILE_DIR}"
+        rm -rf "$(dirname "${PROFILE_DIR}")"
+        mkdir -p "$(dirname "${PROFILE_DIR}")"
 
-    log_info "[create_guix_profile] Installing packages from manifest..."
-    if guix package --manifest="manifest.scm" --profile="${PROFILE_DIR}"
-    then log_info "[create_guix_profile] guix package executed successfully."
-    else log_error "[create_guix_profile] guix package failed!"; return 1
+        log_info "[create_guix_profile] Pulling Guix channels and creating profile..."
+        if guix pull --channels="channels.scm" --profile="${PROFILE_DIR}"
+        then log_info "[create_guix_profile] guix pull executed successfully."
+        else log_error "[create_guix_profile] guix pull failed!"; return 1
+        fi
+
+        . "${GUIX_PROFILE}/etc/profile"
+
+        if [[ "${DEBUG_MODE,,}" == "true" ]]; then
+            guix describe --format=channels -p "${GUIX_PROFILE}" > profile_channels_used.scm
+        fi
+
+        log_info "[create_guix_profile] Installing packages from manifest..."
+        if guix package --manifest="manifest.scm" --profile="${PROFILE_DIR}"
+        then log_info "[create_guix_profile] guix package executed successfully."
+        else log_error "[create_guix_profile] guix package failed!"; return 1
+        fi
+
+        # Mark Guix env built
+        guix_env_built=true
     fi
 
     # Activate profile
-    GUIX_PROFILE="${PROFILE_DIR}"
     . "${GUIX_PROFILE}/etc/profile"
+
+    # Cache Guix profile if it was freshly built
+    if [[ "${guix_env_built}" == true ]]; then
+        cache_guix_profile "${PROFILE_NAME}"
+    fi
 
     # Setup additional Rlibs
     if [ -f "setup_rlibs.R" ]; then
@@ -370,41 +456,62 @@ create_guix_container () {
 
     PROFILE_DESC="${PROJ_GUIX_PROFILE_DESC}/${PROFILE_NAME}"
     PROFILE_DIR="${PROJ_GUIX_PROFILE_DIR}/${PROFILE_NAME}/${PROFILE_NAME}"
-
-    # Activate profile for guix which specified channels were pulled
-    GUIX_PROFILE="${PROFILE_DIR}-1-link"
-    . "${GUIX_PROFILE}/etc/profile"
-
-    if [[ "${DEBUG_MODE,,}" == "true" ]]; then
-        guix describe --format=channels > container_channels_used.scm
-    fi
-
-    # Activate profile
-    GUIX_PROFILE="${PROFILE_DIR}"
-    . "${GUIX_PROFILE}/etc/profile"
-
-    # Create the container
-    log_info "[create_guix_container] Cleaning up and creating container directory: ${PROJ_GUIX_CONTAINER_DIR}/${PROFILE_NAME}"
-    rm -rf "${PROJ_GUIX_CONTAINER_DIR:?}/${PROFILE_NAME}"
-    mkdir -p "${PROJ_GUIX_CONTAINER_DIR}/${PROFILE_NAME}"
     CONTAINER_OUTPUT="${PROJ_GUIX_CONTAINER_DIR}/${PROFILE_NAME}"/container.squashfs
+    local build_container=false
 
-    log_info "[create_guix_container] Creating container with guix pack..."
-    #-S /bin=bin -S /lib=lib -S /usr=share -S /opt/etc=etc \
-    if generated_container=$(guix pack -f squashfs -RR --manifest="manifest.scm")
-    then log_info "[create_guix_container] guix pack executed successfully."
-    else log_error "[create_guix_container] guix pack failed!"; return 1
-    fi
-
-
-    # Safely copy the generated file
-    if [ -f "${generated_container}" ]; then
-        cp "${generated_container}" "${CONTAINER_OUTPUT}"
-        log_info "[create_guix_container] Container created and copied to: ${CONTAINER_OUTPUT}"
+    # Check if container is already exists and cache is valid
+    if [[ -f "${CONTAINER_OUTPUT}" ]]; then
+        log_info "[create_guix_container] Container already exists: ${CONTAINER_OUTPUT}"
+        if check_guix_cache "${PROFILE_NAME}"; then
+            log_info "[create_guix_container] Guix cache is valid. Skipping container creation."
+        else 
+            log_info "[create_guix_container] Guix cache is invalid. Rebuilding container."
+            build_container=true
+        fi
     else
-        log_error "[create_guix_container] Generated container file not found: ${generated_container}"
-        exit 1
+        log_info "[create_guix_container] Container does not exist. Building container."
+        build_container=true
     fi
+
+    if [[ "${build_container}" == true ]]; then
+        
+        # Activate profile for guix which specified channels were pulled
+        GUIX_PROFILE="${PROFILE_DIR}-1-link"
+        . "${GUIX_PROFILE}/etc/profile"
+
+        if [[ "${DEBUG_MODE,,}" == "true" ]]; then
+            guix describe --format=channels > container_channels_used.scm
+        fi
+
+        # Activate profile
+        GUIX_PROFILE="${PROFILE_DIR}"
+        . "${GUIX_PROFILE}/etc/profile"
+
+        # Create the container
+        log_info "[create_guix_container] Cleaning up and creating container directory: ${PROJ_GUIX_CONTAINER_DIR}/${PROFILE_NAME}"
+        rm -rf "${PROJ_GUIX_CONTAINER_DIR:?}/${PROFILE_NAME}"
+        mkdir -p "${PROJ_GUIX_CONTAINER_DIR}/${PROFILE_NAME}"
+        
+
+        log_info "[create_guix_container] Creating container with guix pack..."
+        #-S /bin=bin -S /lib=lib -S /usr=share -S /opt/etc=etc \
+        if generated_container=$(guix pack -f squashfs -RR --manifest="manifest.scm")
+        then log_info "[create_guix_container] guix pack executed successfully."
+        else log_error "[create_guix_container] guix pack failed!"; return 1
+        fi
+
+
+        # Safely copy the generated file
+        if [ -f "${generated_container}" ]; then
+            cp "${generated_container}" "${CONTAINER_OUTPUT}"
+            log_info "[create_guix_container] Container created and copied to: ${CONTAINER_OUTPUT}"
+        else
+            log_error "[create_guix_container] Generated container file not found: ${generated_container}"
+            exit 1
+        fi
+    fi
+
+
 
     # Use the container to set up Rlibs outside the container
     if [ -f "setup_rlibs.R" ]; then
@@ -413,6 +520,7 @@ create_guix_container () {
 
         # Create the Rlibs directory in container directory
         log_info "[create_guix_container] Creating additional Rlib directory: ${GUIX_CONTAINER_R_LIBS}"
+        rm -rf "${GUIX_CONTAINER_R_LIBS}"
         mkdir -p "${GUIX_CONTAINER_R_LIBS}"
 
         # Run setup_rlibs.R with the container
@@ -443,8 +551,9 @@ EOF
         log_info "[create_guix_container] Setting up custom Python libraries using the container..."
         TARGET_DIR="${PROJ_GUIX_CONTAINER_DIR}/${PROFILE_NAME}/lib/python_libs"
 
-        # Create the Rlibs directory in container directory
+        # Create the python_libs directory in container directory
         log_info "[create_guix_container] Creating additional Python library directory: ${TARGET_DIR}"
+        rm -rf "${TARGET_DIR}"
         mkdir -p "${TARGET_DIR}"
 
         # Run setup_python_libs.sh with the container
@@ -712,7 +821,7 @@ setup_env () {
         for description in "${PROJ_MAMBA_ENV_DESC}"/*; do
             if [[ -d "${description}" ]]; then
                 log_info "Processing mamba env: $(basename "${description}")"
-                if create_mamba_env "${description}"
+                if create_mamba_env "${description}" >>"${STEP_OUTPUT_LOG}" 2>>"${STEP_ERROR_LOG}"
                 then log_info "Completed: $(basename "${description}")"
                 else log_error "Failed: $(basename "${description}")"; return 1
                 fi
@@ -729,7 +838,7 @@ setup_env () {
         for definition in "${PROJ_MICROMAMBA_DEF}"/*; do
             if [[ -d "${definition}" ]]; then
                 log_info "Processing micromamba definition: $(basename "${definition}")"
-                if build_micromamba_container "${definition}"
+                if build_micromamba_container "${definition}" >>"${STEP_OUTPUT_LOG}" 2>>"${STEP_ERROR_LOG}"
                 then log_info "Completed: $(basename "${definition}")"
                 else log_error "Failed: $(basename "${definition}")"; return 1
                 fi
