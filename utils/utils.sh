@@ -4,22 +4,41 @@
 log_info () {
     local timestamp
     timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    printf "%s [INFO] %s\n" "${timestamp}" "$1" >> "${STEP_OUTPUT_LOG}"
+    local message="${timestamp} [INFO] $1"
+
+    if [[ -z "${INTERACTIVE_MODE}" || "${INTERACTIVE_MODE,,}" == "true" ]]; then
+        printf "%s\n" "${message}"
+    else
+        printf "%s\n" "${message}" >> "${STEP_OUTPUT_LOG}"
+    fi
 }
 
 log_error () {
     local timestamp
     timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    printf "%s [ERROR] %s\n" "${timestamp}" "$1" >> "${STEP_ERROR_LOG}"
+    local message="${timestamp} [ERROR] $1"
+
+    if [[ -z "${INTERACTIVE_MODE}" || "${INTERACTIVE_MODE,,}" == "true" ]]; then
+        printf "%s\n" "${message}" >&2
+    else
+        printf "%s\n" "${message}" >> "${STEP_ERROR_LOG}"
+    fi
 }
 
 log_debug () {
     if [[ "${DEBUG_MODE,,}" == "true" ]]; then
         local timestamp
         timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-        printf "%s [DEBUG] %s\n" "${timestamp}" "$1" >> "${STEP_OUTPUT_LOG}"
+        local message="${timestamp} [DEBUG] $1"
+
+        if [[ -z "${INTERACTIVE_MODE}" || "${INTERACTIVE_MODE,,}" == "true" ]]; then
+            printf "%s\n" "${message}"
+        else
+            printf "%s\n" "${message}" >> "${STEP_OUTPUT_LOG}"
+        fi
     fi
 }
+
 
 
 # Add a separator with a timestamp and SLURM Job ID
@@ -717,6 +736,7 @@ setup_env () {
     # Define STEP_DIR and JOB_NAME
     STEP_DIR="${PWD}"
     JOB_NAME=$(basename "${STEP_DIR}" | cut -d'_' -f2-)
+    INTERACTIVE_MODE="${INTERACTIVE_MODE:-false}"
 
     # Define log files
     # If STANDALONE_MODE is `true`, logs won't be automatically handled by SLURM.
@@ -1052,6 +1072,7 @@ execute_step () {
     # Define STEP_DIR and JOB_NAME
     export STEP_DIR="${PWD}"
     STEP_DIR_BASE=$(basename "${STEP_DIR}")
+    INTERACTIVE_MODE="${INTERACTIVE_MODE:-false}"
 
     # JOB_NAME=$(basename "${STEP_DIR}" | cut -d'_' -f2-)
     # Check if the step name starts with a number
@@ -1113,7 +1134,7 @@ execute_step () {
         # Define accepted arguments and their default values
         declare -A accepted_args=(
             ["--type"]="task"               # task or pipeline
-            ["--config"]="guix"             # Relevant for tasks, guix or container
+            ["--config"]="guix"             # Relevant for tasks, guix, container, mamba
             ["--mode"]="single"             # Relevant for tasks, single or array
             ["--profile"]="main_profile"    # Relevant for tasks
             ["--directory"]="${PROJDIR}"
