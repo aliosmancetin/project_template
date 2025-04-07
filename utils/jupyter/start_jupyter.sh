@@ -155,7 +155,7 @@ elif [[ "${ENGINE}" == "wsl" ]]; then
 
     jupyter lab \
         --notebook-dir="${PROJDIR}" \
-        --ip="0.0.0.0" \
+        --ip="${WSL_IP}" \
         --port="${PORT}" \
         --no-browser
 

@@ -89,7 +89,7 @@ elif [[ "${ENGINE}" == "wsl" ]]; then
     --server-data-dir="/tmp/rstudio-server" \
     --auth-none=1 \
     --server-user="$(whoami)" \
-    --www-address="0.0.0.0" \
+    --www-address="${WSL_IP}" \
     --www-port="${RSTUDIO_PORT}"
 
 else
