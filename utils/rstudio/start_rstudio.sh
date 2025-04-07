@@ -48,10 +48,11 @@ if [[ "${ENGINE}" == "slurm" ]]; then
 #SBATCH --mail-type=END,FAIL
 #SBATCH --output="${PROJDIR}/utils/rstudio/logs/%x.%j.out"
 
+source /etc/profile.d/slurm.sh
+
 # Load environment
 . ${PROJDIR}/workflow/00_env/env_vars.sh
 activate_guix_profile "${PROFILE}"
-source /etc/profile.d/slurm.sh
 
 echo "Your RStudio instance awaits you at: http://\$(hostname -f):\${SLURM_INTERACT_PORT}"
 echo "Your RStudio instance awaits you at: http://\$(hostname -f):\${SLURM_INTERACT_PORT}" | \
