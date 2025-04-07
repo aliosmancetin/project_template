@@ -14,14 +14,14 @@ WSL_IP=$(hostname -I | awk '{print $1}')
 
 # Notify user where to connect
 echo "RStudio Server is launching..."
-echo "Access it in your Windows browser: http://${WSL_IP}:${RSTUDIO_PORT}"
+echo "Access it in your browser: http://${WSL_IP}:${RSTUDIO_PORT}"
 
 # Start RStudio Server
 rserver \
-  --www-port="${RSTUDIO_PORT}" \
-  --www-address="0.0.0.0" \
-  --auth-none=1 \
-  --server-user="$(whoami)" \
-  --server-data-dir="/tmp/rstudio-server" \
-  --secure-cookie-key-file="/tmp/secure-cookie-key" \
-  --database-config-file=<(echo -e "provider=sqlite\ndirectory=${HOME}/rstudio-server-db")
+    --www-port="${RSTUDIO_PORT}" \
+    --www-address="0.0.0.0" \
+    --auth-none=1 \
+    --server-user="$(whoami)" \
+    --server-data-dir="/tmp/rstudio-server" \
+    --secure-cookie-key-file="/tmp/secure-cookie-key" \
+    --database-config-file=<(echo -e "provider=sqlite\ndirectory=${HOME}/rstudio-server-db")
