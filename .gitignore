@@ -3,6 +3,7 @@
 .Rhistory
 *.Rproj
 .ipynb_checkpoints/
+nohup.out
 lib/
 containers/
 data/
