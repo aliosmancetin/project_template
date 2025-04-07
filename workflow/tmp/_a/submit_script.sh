@@ -6,7 +6,7 @@
 #SBATCH --mail-type=END,FAIL
 
 # Source environment variables
-. ../00_env/env_vars.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/00_env/env_vars.sh"     #. ../00_env/env_vars.sh
 
 # Execute step
 execute_step "$@"
