@@ -2,7 +2,10 @@
 .Rproj.user/
 .Rhistory
 *.Rproj
+.ipynb_checkpoints/
 lib/
 containers/
 data/
 output/
+utils/rstudio/logs/
+utils/jupyter/logs/

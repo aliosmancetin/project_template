@@ -4,18 +4,24 @@
 export TMPDIR="/tmp" # Change this to a different location if you want to use a different tmp directory
 
 # Project directory
-export PROJDIR="___" # Full path to the project directory
+PROJDIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../.." && pwd)" # Full path to the project directory
+export PROJDIR
 . "${PROJDIR}/utils/utils.sh"
 
 # Project specific cache, config, data locations
 export PROJ_CACHE_DIR="${PROJDIR}/.proj/.cache"
 export PROJ_CONFIG_DIR="${PROJDIR}/.proj/.config"
 export PROJ_DATA_DIR="${PROJDIR}/.proj/.data"
+export PROJ_SHARE_DIR="${PROJDIR}/.proj/share"
 
 # R cache, config, data locations
 export R_USER_CACHE_DIR="${PROJ_CACHE_DIR}/R"
 export R_USER_CONFIG_DIR="${PROJ_CONFIG_DIR}/R"
 export R_USER_DATA_DIR="${PROJ_DATA_DIR}/R"
+
+# Jupyter custom paths
+export PROJ_JUPYTER_PATH="${PROJ_SHARE_DIR}/jupyter"
+export PROJ_JUPYTER_DIR="${PROJDIR}/.proj/.jupyter"
 
 # Environment description directories
 export PROJ_GUIX_PROFILE_DESC="${PROJDIR}/workflow/00_env/guix_profile_descriptions"

@@ -46,7 +46,7 @@ if [[ "${ENGINE}" == "slurm" ]]; then
 #SBATCH --mem-per-cpu=50G
 #SBATCH --time=12:00:00
 #SBATCH --mail-type=END,FAIL
-#SBATCH --output=$"{TMPDIR:-/tmp}/rstudio_%j.out"
+#SBATCH --output="${PROJDIR}/utils/rstudio/logs/%x.%j.out"
 
 # Load environment
 . ${PROJDIR}/workflow/00_env/env_vars.sh
@@ -54,16 +54,16 @@ activate_guix_profile "${PROFILE}"
 source /etc/profile.d/slurm.sh
 
 echo "Your RStudio instance awaits you at: http://\$(hostname -f):\${SLURM_INTERACT_PORT}"
-echo "Your RStudio instance awaits you at: http://\$(hostname -f):\${SLURM_INTERACT_PORT}" | \\
+echo "Your RStudio instance awaits you at: http://\$(hostname -f):\${SLURM_INTERACT_PORT}" | \
     mail -s "RStudio instance started for Job \${SLURM_JOB_ID} (\${SLURM_JOB_NAME})" "\${USER}"
 
-rserver \\
-  --database-config-file=<(echo -e "provider=sqlite\ndirectory=\${HOME}/rstudio-server-db") \\
-  --secure-cookie-key-file="\${TMPDIR}/secure-cookie-key" \\
-  --server-data-dir="\${TMPDIR}" \\
-  --auth-none=1 \\
-  --server-user="\$(whoami)" \\
-  --www-address="\${HOSTNAME}" \\
+rserver \
+  --database-config-file=<(echo -e "provider=sqlite\ndirectory=\${HOME}/rstudio-server-db") \
+  --secure-cookie-key-file="\${TMPDIR}/secure-cookie-key" \
+  --server-data-dir="\${TMPDIR}" \
+  --auth-none=1 \
+  --server-user="\$(whoami)" \
+  --www-address="\${HOSTNAME}" \
   --www-port="\${SLURM_INTERACT_PORT}"
 EOF
 )

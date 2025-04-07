@@ -454,6 +454,11 @@ activate_guix_profile () {
     export GUIX_PROFILE="${PROJ_GUIX_PROFILE_DIR}/${PROFILE_NAME}/${PROFILE_NAME}"
     . "${GUIX_PROFILE}/etc/profile"
 
+    if [ -n "${JUPYTER_PATH}" ]; then
+        export JUPYTER_PATH="${PROJ_JUPYTER_PATH}:${JUPYTER_PATH}"
+        export JUPYTER_DATA_DIR="${PROJ_JUPYTER_PATH}"
+    fi
+
     if [ -f "${PROFILE_DESC}/setup_rlibs.R" ]; then
         export R_LIBS_USER="${PROJ_R_LIBS_DIR}/${PROFILE_NAME}"
     fi
@@ -681,6 +686,11 @@ activate_mamba_env () {
 
         # Activate your desired environment using Mamba
         mamba activate "${ENV_DIR}"
+
+        # Set other environment variables
+        if [ -n "${JUPYTER_PATH}" ]; then
+            export JUPYTER_PATH="${PROJ_JUPYTER_PATH}:${JUPYTER_PATH}"
+        fi
     }
     then log_info "[activate_mamba_env] Mamba env ${mamba_env} activated successfully!"; return 0
     else log_error "[activate_mamba_env] Failed to activate Mamba env ${mamba_env} !"; return 1
