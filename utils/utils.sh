@@ -313,8 +313,10 @@ check_guix_cache() {
   local profile_name="$1"
   local profile_desc="${PROJ_GUIX_PROFILE_DESC}/${profile_name}"
   local cache_dir="${PROJDIR}/.proj/.cache/guix_profile_descriptions/${profile_name}"
+  local profile_file
+  profile_file="${PROJ_GUIX_PROFILE_DIR}/${profile_name}/${profile_name}/etc/profile"
 
-  if [[ ! -f "${cache_dir}/channels.hash" || ! -f "${cache_dir}/manifest.hash" ]]; then
+  if [[ ! -f "${cache_dir}/channels.hash" || ! -f "${cache_dir}/manifest.hash" || ! -f "${profile_file}" ]]; then
     log_info "[check_guix_cache] No cache found for profile: ${profile_name}"
     return 1
   fi
@@ -332,9 +334,9 @@ check_guix_cache() {
   cached_channels_hash=$(cat "${cache_dir}/channels.hash")
   cached_manifest_hash=$(cat "${cache_dir}/manifest.hash")
 
-  rm -rf "$temp_dir"
+  rm -rf "${temp_dir}"
 
-  if [[ "$current_channels_hash" == "$cached_channels_hash" && "$current_manifest_hash" == "$cached_manifest_hash" ]]; then
+  if [[ "${current_channels_hash}" == "${cached_channels_hash}" && "${current_manifest_hash}" == "${cached_manifest_hash}" ]]; then
     log_info "[check_guix_cache] Cache valid for profile: ${profile_name}. Skipping rebuild."
     return 0
   else
