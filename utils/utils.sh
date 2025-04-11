@@ -1212,14 +1212,6 @@ execute_step () {
         return 1
     fi
 
-    # Check if STEP_SCRIPT is available
-    if [ -f "${STEP_SCRIPT}" ]; then
-        log_info "STEP_SCRIPT is: ${STEP_SCRIPT}"
-    else
-        log_error "STEP_SCRIPT ( ${STEP_SCRIPT} ) not found!"
-        return 1
-    fi
-
 
     ARRAY_INPUT_FILE="${accepted_args["--array-input-file"]}"
     MAMBA_ENV="${accepted_args["--mamba-env"]}"
