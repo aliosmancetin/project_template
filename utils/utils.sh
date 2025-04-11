@@ -1183,9 +1183,25 @@ execute_step () {
     STEP_PROFILE="${accepted_args["--profile"]}"
     STEP_RUN_DIR="${accepted_args["--directory"]}"
     STEP_SCRIPT="${STEP_DIR}"/"${accepted_args["--script"]}"
-    
-    ARRAY_INPUT_FILE="${accepted_args["--array-input-file"]}"
-    MAMBA_ENV="${accepted_args["--mamba-env"]}"
+
+    # If STEP_SCRIPT is not provided, look for a script in the STEP_RUN_DIR
+    if [[ -z "${STEP_SCRIPT}" ]]; then
+        mapfile -t matching_scripts < <(
+            find "${STEP_RUN_DIR}" -maxdepth 1 -type f \( -iname "*.R" -o -iname "*.py" -o -iname "*.sh" \) \
+                ! -iname "step.config" ! -iname "submit_script.sh"
+        )
+
+        if [[ ${#matching_scripts[@]} -eq 0 ]]; then
+            log_error "No executable script found in ${STEP_RUN_DIR} (expecting a .R, .py, or .sh file excluding 'step.config' and 'submit_script.sh')."
+            return 1
+        elif [[ ${#matching_scripts[@]} -gt 1 ]]; then
+            log_error "Multiple candidate scripts found in ${STEP_RUN_DIR}: ${matching_scripts[*]}"
+            return 1
+        else
+            STEP_SCRIPT="${matching_scripts[0]}"
+            log_info "Identified step script: ${STEP_SCRIPT}"
+        fi
+    fi
 
     # Check if STEP_SCRIPT is available
     if [ -f "${STEP_SCRIPT}" ]; then
@@ -1195,6 +1211,9 @@ execute_step () {
         return 1
     fi
 
+
+    ARRAY_INPUT_FILE="${accepted_args["--array-input-file"]}"
+    MAMBA_ENV="${accepted_args["--mamba-env"]}"
 
     ##### Main Execution Logic ####
     # Run based on configuration
