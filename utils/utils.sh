@@ -1182,25 +1182,34 @@ execute_step () {
 
     STEP_PROFILE="${accepted_args["--profile"]}"
     STEP_RUN_DIR="${accepted_args["--directory"]}"
-    STEP_SCRIPT="${STEP_DIR}"/"${accepted_args["--script"]}"
 
     # If STEP_SCRIPT is not provided, look for a script in the STEP_RUN_DIR
-    if [[ -z "${STEP_SCRIPT}" ]]; then
+    if [[ -z "${accepted_args["--script"]}" ]]; then
         mapfile -t matching_scripts < <(
-            find "${STEP_RUN_DIR}" -maxdepth 1 -type f \( -iname "*.R" -o -iname "*.py" -o -iname "*.sh" \) \
+            find "${STEP_DIR}" -maxdepth 1 -type f \( -iname "*.R" -o -iname "*.py" -o -iname "*.sh" \) \
                 ! -iname "step.config" ! -iname "submit_script.sh"
         )
 
         if [[ ${#matching_scripts[@]} -eq 0 ]]; then
-            log_error "No executable script found in ${STEP_RUN_DIR} (expecting a .R, .py, or .sh file excluding 'step.config' and 'submit_script.sh')."
+            log_error "No executable script found in ${STEP_DIR} (expecting a .R, .py, or .sh file excluding 'step.config' and 'submit_script.sh')."
             return 1
         elif [[ ${#matching_scripts[@]} -gt 1 ]]; then
-            log_error "Multiple candidate scripts found in ${STEP_RUN_DIR}: ${matching_scripts[*]}"
+            log_error "Multiple candidate scripts found in ${STEP_DIR}: ${matching_scripts[*]}"
             return 1
         else
             STEP_SCRIPT="${matching_scripts[0]}"
             log_info "Identified step script: ${STEP_SCRIPT}"
         fi
+    elif [[ -n "${accepted_args["--script"]}" ]]; then
+        STEP_SCRIPT="${STEP_DIR}"/"${accepted_args["--script"]}"
+    fi
+
+    # Check if STEP_SCRIPT is available
+    if [ -f "${STEP_SCRIPT}" ]; then
+        log_info "STEP_SCRIPT is: ${STEP_SCRIPT}"
+    else
+        log_error "STEP_SCRIPT ( ${STEP_SCRIPT} ) not found!"
+        return 1
     fi
 
     # Check if STEP_SCRIPT is available
