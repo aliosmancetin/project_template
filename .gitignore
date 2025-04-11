@@ -1,12 +1,23 @@
+# Ignore proj specific hiddens
 .proj/
 .Rproj.user/
 .Rhistory
 *.Rproj
 .ipynb_checkpoints/
 nohup.out
+
+# Ignore libraries and containers
 lib/
 containers/
+
+# Ignore data and output
 data/
 output/
+
+# Only ignore results
+!output/results/
+!output/results/**
+
+# Ignore rstudio and jupyter logs
 utils/rstudio/logs/
 utils/jupyter/logs/
