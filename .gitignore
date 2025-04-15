@@ -5,6 +5,7 @@
 *.Rproj
 .ipynb_checkpoints/
 nohup.out
+.secrets/
 
 # Ignore libraries and containers
 lib/
