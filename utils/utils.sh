@@ -351,6 +351,9 @@ export -f cache_guix_profile
 create_guix_profile () {
     local PROFILE_NAME=$1
 
+    local config
+    config="${accepted_args["--config"]}"
+
     log_info "[create_guix_profile] Setting up: ${PROFILE_NAME}"
 
     PROFILE_DIR="${PROJ_GUIX_PROFILE_DIR}/${PROFILE_NAME}/${PROFILE_NAME}"
@@ -432,6 +435,18 @@ create_guix_profile () {
         else log_error "[create_guix_profile] Failed to set up additional Python libraries."; return 1
         fi
     else log_info "[create_guix_profile] No setup_python_libs.sh found. Skipping additional Python libraries setup."
+    fi
+
+    # Remove container if config == both and guix_env_built == true
+    if [[ "${config}" == "both" && "${guix_env_built}" == true ]]; then
+        CONTAINER_OUTPUT="${PROJ_GUIX_CONTAINER_DIR}/${PROFILE_NAME}"/container.squashfs
+        log_info "[create_guix_profile] Cleaning up container directory because cache is no longer valid: ${CONTAINER_OUTPUT}"
+        
+        if [[ -f "${CONTAINER_OUTPUT}" ]]; then
+            rm -rf "${CONTAINER_OUTPUT}"
+        else
+            log_info "[create_guix_profile] No container found to remove."
+        fi
     fi
 
     log_info "[create_guix_profile] Setup completed successfully: ${PROFILE_NAME}"
