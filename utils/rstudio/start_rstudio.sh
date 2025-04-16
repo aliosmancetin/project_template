@@ -48,7 +48,7 @@ if [[ "${ENGINE}" == "slurm" ]]; then
 #SBATCH --mail-type=END,FAIL
 #SBATCH --output="${PROJDIR}/utils/rstudio/logs/%x.%j.out"
 
-source /etc/profile.d/slurm.sh
+# source /etc/profile.d/slurm.sh # No need to source this if running in a SLURM job
 
 # Load environment
 . ${PROJDIR}/workflow/00_env/env_vars.sh

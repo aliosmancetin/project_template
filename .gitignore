@@ -16,6 +16,7 @@ data/
 output/
 
 # Only ignore results
+!output/
 !output/results/
 !output/results/**
 
