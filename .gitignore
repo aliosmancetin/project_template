@@ -11,12 +11,11 @@ nohup.out
 lib/
 containers/
 
-# Ignore data and output
+# Ignore data
 data/
-output/
 
-# Only ignore results
-!output/
+# Ignore output but track results
+output/*
 !output/results/
 !output/results/**
 
