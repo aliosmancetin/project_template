@@ -6,6 +6,9 @@
 .ipynb_checkpoints/
 nohup.out
 .secrets/
+.httr-oauth
+.DS_Store
+.quarto
 
 # Ignore libraries and containers
 lib/
