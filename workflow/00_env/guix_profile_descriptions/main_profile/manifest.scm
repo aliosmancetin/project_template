@@ -17,7 +17,6 @@
 	"r-summarizedexperiment"
 	"r-biocmanager"
 	"r-tidyverse"
-	"rstudio-server"
 	"r"
 	"rstudio-server"
 	"procps"

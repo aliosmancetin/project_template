@@ -6,7 +6,7 @@ export TMPDIR="/tmp" # Change this to a different location if you want to use a 
 # Project directory
 PROJDIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../.." && pwd)" # Full path to the project directory
 export PROJDIR
-. "${PROJDIR}/utils/utils.sh"
+for f in "${PROJDIR}/utils/workflow"/*.sh; do [ -f "$f" ] && . "$f"; done #. "${PROJDIR}/utils/utils.sh"
 
 # Project specific cache, config, data locations
 export PROJ_CACHE_DIR="${PROJDIR}/.proj/.cache"

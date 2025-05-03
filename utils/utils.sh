@@ -211,6 +211,28 @@ merge_args_with_config () {
 export -f merge_args_with_config
 
 
+parse_options_file() {
+    local file_path="$1"
+    local -n out_array="$2"
+
+    if [[ ! -f "${file_path}" || ! -s "${file_path}" ]]; then
+        log_info "[parse_options_file] File not found or is empty: ${file_path}"
+        out_array=()
+        return 0
+    fi
+
+    out_array=()  # Clear output array first
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        # Skip empty lines or comments
+        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+        out_array+=("$line")
+    done < "${file_path}"
+
+    log_info "[parse_options_file] Parsed ${#out_array[@]} options from: ${file_path}"
+}
+
+export -f parse_options_file
+
 
 
 # Function to execute setup scripts
