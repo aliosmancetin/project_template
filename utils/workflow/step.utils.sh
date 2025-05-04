@@ -73,8 +73,20 @@ parse_config_yaml () {
         done
 
         # debug
-        log_debug "[$map_name] → ${entries[*]}"
+        log_debug "[${FUNCNAME[0]}] ${map_name} → ${entries[*]}"
     done
+    
+    # Handle special case: 'script.positional' as a list
+    if yq eval '.script.positional | tag' "${config_file}" | grep -q '!!seq'; then
+        mapfile -t _script_positional_items < <(yq eval '.script.positional[]' "${config_file}")
+
+        # Flatten to a single space-separated string (preserving token order)
+        flattened_positional=$(printf "%s " "${_script_positional_items[@]}")
+        config_script_args["positional"]="${flattened_positional% }"  # Trim trailing space
+
+        log_debug "[${FUNCNAME[0]}] Parsed script.positional as: ${config_script_args["positional"]}"
+    fi
+
 }
 
 export -f parse_config_yaml

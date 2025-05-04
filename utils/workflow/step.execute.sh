@@ -106,9 +106,18 @@ execute_step () {
     # Initialize an index array to hold the arguments
     add_args=()
 
+    # Handle 'positional' first — expand each item as a raw token
+    if [[ -n "${script_args[positional]}" ]]; then
+        # Use eval to preserve proper splitting (e.g., "--flag -v file.txt")
+        eval 'add_args+=('"${script_args[positional]}"')'
+    fi
+
     # Iterate over the associative array and construct arguments
+    # Append other key-value args as --key=value
     for key in "${!script_args[@]}"; do
-        add_args+=("--${key}=${script_args[$key]}")
+        if [[ "$key" != "positional" ]]; then
+            add_args+=("--${key}=${script_args[$key]}")
+        fi
     done
 
     log_debug "add_args: $(for key in "${!add_args[@]}"; do printf "\n%s: %s" "$key" "${add_args[$key]}" ; done)"
